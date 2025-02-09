@@ -1,0 +1,160 @@
+---
+title: 'Como fazer um gráfico animado no R: Exemplo para dados de violência'
+date: "`r Sys.Date()`"
+author: "Gladson Rabelo | gladsonrf1@gmail.com"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 80
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Esse script vai te ajudar a fazer gráficos animados no R Vamos usar o
+exemplo de agressão (homicidios), mas vc pode aplicar para qualquer
+variável, desde que os dados sejam longitudionais (no tempo) Vamos
+nesssa?
+
+O primeiro passo é carregar os pacotes Se não tiver instalado, instale
+com a função install.packages()
+
+Como eu já instalei, basta carregar com a função library()
+
+## Importando os Pacotes
+```{r, echo=T, message=FALSE, warning=FALSE}
+pacman::p_load(readr,tidyverse, lubridate,ggpubr,
+               readxl,gganimate,gghighlight,ggpubr,ggrepel,ggplot2)
+```
+
+Pronto, o R já está pronto para fazer as coisas Vamos agora pegar a base
+de dados.
+
+Para facilitar a nossa vida, deixei a planilha em um google sheets.
+Assim, dá para puxar sem fazer download do arquivo. :)
+
+## Importando os dados
+```{r, echo=T, message=FALSE, warning=FALSE}
+url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRcaVYkC_68EfAxYOcIn9uppRn0KHq1ZUdL41V8dLG8X_n60mx5hvcsBoWNfEG01f8qbbLWT8oNn8jv/pub?output=csv"
+agresssao_96_21 <- read.csv(url)
+View(agresssao_96_21)
+```
+
+## Tratamento de dados
+```{r, echo=T, message=FALSE, warning=FALSE}
+agresssao_96_21_rec <- data.frame(agresssao_96_21) # transforma em data frame
+
+agresssao_96_21_rec <- mutate_all(agresssao_96_21_rec, as.numeric) # transforma tudo em numerico
+```
+
+Para deixar os dados mais fáceis para fazer gráficos, vamos fazer a
+pivotagem deles.
+
+\newpage
+
+### Pivotagem
+```{r, echo=T, message=FALSE, warning=FALSE}
+agresssao_96_21_rec_long <- pivot_longer(agresssao_96_21_rec,
+                                         cols = -ano,
+                                         names_to = "uf",
+                                         values_to = "n_cvli",
+                                         names_prefix = ".*_") # coloca a base em formato long
+```
+
+Com essas 4 funções nós importamos a base, transformamos em planilha,
+deixamos todas as variáveis como numéricas e pivotamos os dados para
+outro formato no caso, o formato long. Observe como ficou a planilha: 3
+variaveis: ano, uf e n_cvli
+
+### Agrupando os dados por UF
+```{r, echo=T, message=FALSE, warning=FALSE}
+agresssao_96_21_rec_long <-agresssao_96_21_rec_long %>% 
+  group_by(uf) %>% 
+  mutate(std_value = scale(n_cvli)) # Vamos padronizar os valores
+
+agresssao_96_21_rec_long <- na.omit(agresssao_96_21_rec_long) # remover casos 
+                                                                #ausentes
+```
+
+Vamos fazer nosso primeiro gráfico animado.
+
+## Visualizando os dados
+
+### Gráfico animado para um estado.
+```{r, echo=T, message=FALSE, warning=FALSE}
+ce <- agresssao_96_21_rec_long %>%
+  ggplot(aes(ano, std_value, 
+             colour = uf,
+             fill = "blue")) +
+  geom_line(size = 1.5,
+            alpha = .5,
+            fill = "blue",
+            col = "blue") +
+  gghighlight(uf == "CE", #Escolha a UF que voce deseja
+              label_params = list(size = 8, 
+                                  fill = "gray",
+                                  col = "blue",
+                                  alpha = .9)) + # aqui a gente escolhe o caso 
+                                                #que será destacado
+  geom_text(aes(label = uf),
+            size=9,
+            fontface='bold',
+            col = "blue") + # aqui a gente coloca o texto
+  theme_bw() +
+  labs(x = "",
+       y = "X85-Y09 Agressões",
+       title = "X85-Y09 Agressões por UF (1996 - 2021)",
+       subtitle = "Valores padronizados por UF",
+       caption = "Fonte: RABELO (2024) a partir do DATASUS")  +
+  theme(text = element_text(size = 18)) +
+  transition_reveal(ano)
+
+
+# salva como gif no seu computador!
+#animate(ce, duration = 5, fps = 20, width = 500, height = 500, renderer = gifski_renderer())
+#anim_save("ce1.gif")
+
+#Quando voce for executar retire o # das duas linhas acima, o Rmarkdown não
+#  permite gifs em pdf, obviamente :)
+
+```
+
+### E para colocar os 2 estados juntos?
+```{r, echo=T, message=FALSE, warning=FALSE}
+
+CE_PB <- agresssao_96_21_rec_long %>%
+  ggplot(aes(ano, std_value, 
+             colour = uf,  # A cor é baseada no nome do estado
+             fill = uf)) +  # A cor de preenchimento também é baseada no nome do estado
+  geom_line(size = 1.5, alpha = .5) +
+  gghighlight(uf %in% c("CE", "PB"),  # Destaca São Paulo e Rio de Janeiro
+              label_params = list(size = 8, 
+                                  fill = "gray",
+                                  col = "blue",
+                                  alpha = .9)) +
+  geom_text(aes(label = uf),
+            size = 9,
+            fontface = 'bold',
+            vjust = -1) +  # Ajusta a posição do texto
+  scale_colour_manual(values = c("CE" = "blue", "PB" = "red")) +  # Define cores manualmente para CE e PB
+  theme_bw() +
+  labs(x = "",
+       y = "X85-Y09 Agressões",
+       title = "X85-Y09 Agressões por UF (1996 - 2021)",
+       subtitle = "Valores padronizados por UF",
+       caption = "Fonte: RABELO (2024) a partir do DATASUS") + #Coloque sua legenda
+  theme(text = element_text(size = 18)) +
+  transition_reveal(ano)
+
+#animate(CE_PB, duration = 10, fps = 20, width = 500, height = 500, renderer = gifski_renderer())
+#anim_save("CE_PB.gif")
+
+#Quando voce for executar retire o '#' das duas linhas acima, 
+#o Rmarkdown não permite gifs em pdf, obviamente :)
+```
+
+### Pronto, espero que tenha te ajudado! :)
